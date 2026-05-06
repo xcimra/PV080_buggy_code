@@ -23,7 +23,7 @@ def print_nametag(format_string, person):
     print(format_string.format(person=person))
 
 
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 import urllib.request
 import ipaddress
 import socket
@@ -42,11 +42,46 @@ def fetch_website(urllib_version, url):
         raise ValueError("Invalid scheme")
 
     # Allow only trusted domains
-    if parsed.hostname not in ALLOWED_HOSTS:
+    hostname = parsed.hostname
+    if hostname not in ALLOWED_HOSTS:
         raise ValueError("Host not allowed")
 
+    # Resolve hostname and block local/private/reserved targets
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
+        addrinfos = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except socket.gaierror:
+        raise ValueError("Host resolution failed")
+
+    for info in addrinfos:
+        ip_str = info[4][0]
+        ip_obj = ipaddress.ip_address(ip_str)
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or ip_obj.is_unspecified
+        ):
+            raise ValueError("Resolved IP not allowed")
+
+    # Rebuild URL from validated components instead of using raw user input
+    netloc = hostname
+    if parsed.port is not None:
+        netloc = f"{hostname}:{parsed.port}"
+    safe_url = urlunparse(
+        (
+            parsed.scheme,
+            netloc,
+            parsed.path or "/",
+            "",
+            parsed.query,
+            "",
+        )
+    )
+
+    try:
+        with urllib.request.urlopen(safe_url, timeout=5) as response:
             return response.read()
     except Exception:
         return "Exception"
