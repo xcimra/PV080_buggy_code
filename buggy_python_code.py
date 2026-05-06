@@ -28,39 +28,24 @@ import urllib.request
 import ipaddress
 import socket
 
-def is_safe_url(url):
+
+ALLOWED_HOSTS = {"example.com", "www.example.com"}
+
+def fetch_website(urllib_version, url):
+    if urllib_version not in {"2", "3"}:
+        raise ValueError("Unsupported urllib version")
+
     parsed = urlparse(url)
 
     # Allow only http/https
     if parsed.scheme not in {"http", "https"}:
-        return False
+        raise ValueError("Invalid scheme")
 
-    if not parsed.hostname:
-        return False
-
-    try:
-        ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
-
-        # Block internal / unsafe ranges
-        if ip.is_private or ip.is_loopback or ip.is_link_local:
-            return False
-    except Exception:
-        return False
-
-    return True
-
-
-def fetch_website(urllib_version, url):
-    # Validate version explicitly (no exec)
-    if urllib_version not in {"2", "3"}:
-        raise ValueError("Unsupported urllib version")
-
-    # Prevent SSRF
-    if not is_safe_url(url):
-        raise ValueError("Unsafe URL")
+    # Allow only trusted domains
+    if parsed.hostname not in ALLOWED_HOSTS:
+        raise ValueError("Host not allowed")
 
     try:
-        # Modern Python → urllib.request
         with urllib.request.urlopen(url, timeout=5) as response:
             return response.read()
     except Exception:
