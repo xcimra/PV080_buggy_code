@@ -23,31 +23,48 @@ def print_nametag(format_string, person):
     print(format_string.format(person=person))
 
 
+from urllib.parse import urlparse
+import urllib.request
+import ipaddress
+import socket
+
+def is_safe_url(url):
+    parsed = urlparse(url)
+
+    # Allow only http/https
+    if parsed.scheme not in {"http", "https"}:
+        return False
+
+    if not parsed.hostname:
+        return False
+
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
+
+        # Block internal / unsafe ranges
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            return False
+    except Exception:
+        return False
+
+    return True
+
+
 def fetch_website(urllib_version, url):
-    # Import the requested version (2 or 3) of urllib
-    if urllib_version == "3":
-        import urllib.request as urllib_request
-        try:
-            with urllib_request.urlopen(url) as response:
-                return response.read()
-        except Exception as e:
-            return f"Error: {e}"
+    # Validate version explicitly (no exec)
+    if urllib_version not in {"2", "3"}:
+        raise ValueError("Unsupported urllib version")
 
-    elif urllib_version == "2":
-        import urllib2
-        try:
-            response = urllib2.urlopen(url)
+    # Prevent SSRF
+    if not is_safe_url(url):
+        raise ValueError("Unsafe URL")
+
+    try:
+        # Modern Python → urllib.request
+        with urllib.request.urlopen(url, timeout=5) as response:
             return response.read()
-        except Exception as e:
-            return f"Error: {e}"
-    # Fetch and print the requested URL
- 
-    try: 
-        http = urllib.PoolManager()
-        r = http.request('GET', url)
-    except:
-        print('Exception')
-
+    except Exception:
+        return "Exception"
 
 def load_yaml(filename):
     stream = open(filename)
