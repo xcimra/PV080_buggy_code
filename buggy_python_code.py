@@ -23,68 +23,17 @@ def print_nametag(format_string, person):
     print(format_string.format(person=person))
 
 
-from urllib.parse import urlparse, urlunparse
-import urllib.request
-import ipaddress
-import socket
-
-
-ALLOWED_HOSTS = {"example.com", "www.example.com"}
-
 def fetch_website(urllib_version, url):
-    if urllib_version not in {"2", "3"}:
-        raise ValueError("Unsupported urllib version")
+    # Import the requested version (2 or 3) of urllib
+    exec(f"import urllib{urllib_version} as urllib", globals())
+    # Fetch and print the requested URL
+ 
+    try: 
+        http = urllib.PoolManager()
+        r = http.request('GET', url)
+    except:
+        print('Exception')
 
-    parsed = urlparse(url)
-
-    # Allow only http/https
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError("Invalid scheme")
-
-    # Allow only trusted domains
-    hostname = parsed.hostname
-    if hostname not in ALLOWED_HOSTS:
-        raise ValueError("Host not allowed")
-
-    # Resolve hostname and block local/private/reserved targets
-    try:
-        addrinfos = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
-    except socket.gaierror:
-        raise ValueError("Host resolution failed")
-
-    for info in addrinfos:
-        ip_str = info[4][0]
-        ip_obj = ipaddress.ip_address(ip_str)
-        if (
-            ip_obj.is_private
-            or ip_obj.is_loopback
-            or ip_obj.is_link_local
-            or ip_obj.is_reserved
-            or ip_obj.is_multicast
-            or ip_obj.is_unspecified
-        ):
-            raise ValueError("Resolved IP not allowed")
-
-    # Rebuild URL from validated components instead of using raw user input
-    netloc = hostname
-    if parsed.port is not None:
-        netloc = f"{hostname}:{parsed.port}"
-    safe_url = urlunparse(
-        (
-            parsed.scheme,
-            netloc,
-            parsed.path or "/",
-            "",
-            parsed.query,
-            "",
-        )
-    )
-
-    try:
-        with urllib.request.urlopen(safe_url, timeout=5) as response:
-            return response.read()
-    except Exception:
-        return "Exception"
 
 def load_yaml(filename):
     stream = open(filename)
